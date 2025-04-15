@@ -1,0 +1,43 @@
+# IntelliJ IDEA
+.idea/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Logs
+*.log
+*.tmp
+
+# Build output
+build/
+dist/
+*.egg-info/
+
+# Configuration and secret files
+config/
+.env
+*.json
+*.yml
+.gitconfig
+
+datasets/
+
+test.py
+
+db.sqlite3
+
+storage/
+
+*.pt
+*.pth
+*.pkl
