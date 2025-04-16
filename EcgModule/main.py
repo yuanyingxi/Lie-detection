@@ -318,7 +318,7 @@ def main():
     print(f"类别1(说谎)准确率: {class1_acc:.4f}")
 
     # 保存模型和标准化器参数
-    model_save_path = 'Label/lie_detection__model.pth'
+    model_save_path = 'Label/lie_detection_model.pth'
     torch.save({
         'model_state_dict': model.module_.state_dict(),
         'scaler_mean': scaler.mean_,

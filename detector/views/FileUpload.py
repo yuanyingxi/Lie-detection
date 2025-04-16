@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.request import Request
 
+from EcgModule.predict import EcgFileProcessor, load_ecg_from_csv
 from EegModule.file_processing import EegFileProcessor
 
 
@@ -67,9 +68,6 @@ class BaseUploadView(APIView):
     def process_file(self, file_obj):
         pass
 
-    def get(self, request, *args, **kwargs):
-        return Response({'info': "417417417"}, status=status.HTTP_200_OK)
-
     # 上传文件
     def post(self, request: Request, *args, **kwargs):
         upload_file = request.FILES.get('file')  # 从 FILES 字典获取文件对象
@@ -87,8 +85,7 @@ class BaseUploadView(APIView):
             # 构造响应数据
             response_data = {
                 'status': 'success',
-                'file_path': save_path,
-                'process_result': result,
+                'data': result,
             }
             return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -113,3 +110,19 @@ class EEGUploadView(BaseUploadView):
             return {'error': 'EEG 处理失败', 'detail': str(e)}
 
 
+# TODO: ECG 处理
+class ECGUploadView(BaseUploadView):
+    file_type = 'ecg'
+    allowed_extensions = ['.csv', 'acq']
+    max_size_mb = 100  # 100MB
+
+    # 处理上传的 EEG 文件
+    def process_file(self, file_obj):
+        try:
+            ecgFileProcessor = EcgFileProcessor()
+            ecg_signal, sampling_rate = load_ecg_from_csv(file_obj)
+            output = ecgFileProcessor.predict_proba(ecg_signal, sampling_rate)
+            return output
+
+        except Exception as e:
+            return {'error': 'ECG 处理失败', 'detail': str(e)}

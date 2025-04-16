@@ -1,24 +1,26 @@
+import argparse
+import os
+import sys
+import warnings
+
 import numpy as np
 import torch
-import torch.nn as nn
-import neurokit2 as nk
-import pywt
-import cv2
 import pandas as pd
-import os
-import warnings
 from scipy import signal
 from sklearn.preprocessing import StandardScaler
-from main import LieDetectionModel, extract_rr_features, process_ecg_signal
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
+from main import LieDetectionModel, process_ecg_signal
 from wavelet_denoising import remove_baseline_wander, wavelet_noising
-import argparse
 
 # 禁用警告
 warnings.filterwarnings("ignore")
 
 
-class LieDetector:
-    def __init__(self, model_path='lie_detection_model.pth'):
+class EcgFileProcessor:
+    def __init__(self, model_path='EcgModule/lie_detection_model.pth'):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = LieDetectionModel().to(self.device)
         self.scaler = StandardScaler()
@@ -32,7 +34,7 @@ class LieDetector:
 
     def load_model(self, model_path):
         """加载预训练模型和标准化器参数"""
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.scaler.mean_ = checkpoint['scaler_mean']
         self.scaler.scale_ = checkpoint['scaler_scale']
@@ -94,7 +96,13 @@ class LieDetector:
             probabilities = torch.softmax(outputs, dim=1)
             lie_prob = probabilities[0, 1].item()  # 获取说谎类别的概率
 
-        return lie_prob
+        Response_data = {
+            "modality": "ecg",
+            "confidence": 1 - abs(lie_prob - round(lie_prob)),
+            "result": "诚实" if lie_prob < 0.5 else "说谎"
+        }
+
+        return Response_data
 
 
 def load_ecg_from_csv(csv_path):
@@ -135,7 +143,7 @@ if __name__ == "__main__":
 
     # 初始化检测器
     try:
-        detector = LieDetector(args.model_path)
+        detector = EcgFileProcessor(args.model_path)
     except Exception as e:
         print(f"加载模型失败: {str(e)}")
 

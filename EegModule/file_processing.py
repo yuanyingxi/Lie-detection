@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pywt
 import torch
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
@@ -49,7 +48,7 @@ class EegFileProcessor:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     def preprocessing(self, file):
-        features = np.array(Preprocessing.load_data(file))[:384, :]
+        features = np.array(Preprocessing.load_data(file))[3840:4224, :]
         features = Preprocessing.extract_dwt_features(features)
         features = self.scaler.transform(features.reshape(1, -1))
         features = features.reshape(1, 1, -1)  # (samples, channels, features)
@@ -65,6 +64,11 @@ class EegFileProcessor:
         self.dim = self.features.shape[-1]
         self.model_setup()
         with torch.no_grad():
-            output = self.model(self.features)
+            output = self.model(self.features).item()
+            Response_data = {
+                "modality": "eeg",
+                "confidence": 1 - abs(output - round(output)),
+                "result": "说谎" if output < 0.5 else "诚实"
+            }
 
-        return output.item()
+        return Response_data
