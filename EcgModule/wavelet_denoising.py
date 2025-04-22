@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import pywt
-from ecgLoader import EcgLoader
+from .ecgLoader import EcgLoader
 import scipy.signal as sg
 
 def get_ecg_data():

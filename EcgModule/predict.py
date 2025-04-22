@@ -9,11 +9,8 @@ import pandas as pd
 from scipy import signal
 from sklearn.preprocessing import StandardScaler
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
-
-from main import LieDetectionModel, process_ecg_signal
-from wavelet_denoising import remove_baseline_wander, wavelet_noising
+from .main import LieDetectionModel, process_ecg_signal
+from .wavelet_denoising import remove_baseline_wander, wavelet_noising
 
 # 禁用警告
 warnings.filterwarnings("ignore")
@@ -96,13 +93,7 @@ class EcgFileProcessor:
             probabilities = torch.softmax(outputs, dim=1)
             lie_prob = probabilities[0, 1].item()  # 获取说谎类别的概率
 
-        Response_data = {
-            "modality": "ecg",
-            "confidence": 1 - abs(lie_prob - round(lie_prob)),
-            "result": "诚实" if lie_prob < 0.5 else "说谎"
-        }
-
-        return Response_data
+        return lie_prob
 
 
 def load_ecg_from_csv(csv_path):

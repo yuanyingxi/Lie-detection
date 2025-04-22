@@ -1,21 +1,24 @@
 import os
+import sys
+
 import cv2
 import dlib
 import numpy as np
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
-import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import (Conv3D, Conv2D, MaxPooling3D, MaxPooling2D,
                                      Flatten, Dense, concatenate, Input, Dropout)
 from tensorflow.keras.models import load_model
 
-lstm_model_path = "model/lstm_model.h5"
-predictor_path = "shape_predictor_68_face_landmarks.dat"  # 人脸特征点文件
-cnn_model_path = "model/lie_detection_model.h5"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
 
+lstm_model_path = "FaceModule/model/lstm_model.h5"
+predictor_path = "FaceModule/shape_predictor_68_face_landmarks.dat"  # 人脸特征点文件
+cnn_model_path = "FaceModule/model/lie_detection_model.h5"
 
 class MicroExpressionDetector:
     def __init__(self, reference_size=(96, 112), num_bins=9, window_size=50, overlap=20):

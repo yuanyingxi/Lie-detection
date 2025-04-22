@@ -11,7 +11,7 @@ from skorch.helper import predefined_split
 import neurokit2 as nk
 import pywt
 import cv2
-from wavelet_denoising import get_processed_ecg
+from .wavelet_denoising import get_processed_ecg
 import pandas as pd
 import os
 import warnings
@@ -180,7 +180,7 @@ def augment_honest_samples(x1_data, x2_data, y_data):
                 # 时间扭曲
                 scale_factor = np.random.uniform(0.9, 1.1)
                 scaled_x1 = cv2.resize(x1_data[idx].squeeze(),
-                                     (int(100 * scale_factor), int(100 * scale_factor)))
+                                       (int(100 * scale_factor), int(100 * scale_factor)))
                 scaled_x1 = cv2.resize(scaled_x1, (100, 100))
                 scaled_x1 = np.expand_dims(scaled_x1, axis=0)
                 augmented_x1.append(scaled_x1)

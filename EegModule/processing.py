@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from torch import optim
 from torch.utils.data import TensorDataset, DataLoader
 
-from model import *
+from .model import *
 
 
 # 加载并合并数据

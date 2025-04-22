@@ -6,10 +6,8 @@ import numpy as np
 import pandas as pd
 import pywt
 import torch
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
 
-from EegModule.model import CNNmodel
+from .model import CNNmodel
 
 
 class Preprocessing:
@@ -65,10 +63,5 @@ class EegFileProcessor:
         self.model_setup()
         with torch.no_grad():
             output = self.model(self.features).item()
-            Response_data = {
-                "modality": "eeg",
-                "confidence": 1 - abs(output - round(output)),
-                "result": "说谎" if output < 0.5 else "诚实"
-            }
 
-        return Response_data
+        return output

@@ -49,3 +49,4 @@ class CNNmodel(nn.Module):
             L = L - 2
             L = (L - 2) // 2 + 1
         return 64 * L
+

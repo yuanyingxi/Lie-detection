@@ -41,3 +41,5 @@ storage/
 *.pt
 *.pth
 *.pkl
+*.h5
+*.dat

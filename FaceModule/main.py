@@ -1,20 +1,24 @@
 import os
+import sys
+
 import cv2
 import dlib
 import numpy as np
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
-import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import (Conv3D, Conv2D, MaxPooling3D, MaxPooling2D,
                                      Flatten, Dense, concatenate, Input, Dropout)
 from tensorflow.keras.models import load_model
 
-lstm_model_path = "model/lstm_model.h5"
-predictor_path = "shape_predictor_68_face_landmarks.dat"  # 人脸特征点文件
-cnn_model_path = "model/lie_detection_model.h5"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
+lstm_model_path = "FaceModule/model/lstm_model.h5"
+predictor_path = "FaceModule/shape_predictor_68_face_landmarks.dat"  # 人脸特征点文件
+cnn_model_path = "FaceModule/model/lie_detection_model.h5"
 
 
 class MicroExpressionDetector:
@@ -404,7 +408,7 @@ class LieDetectionNetwork:
         print(f"已从 {cnn_model_path} 加载模型")
 
 
-class LieDetection:
+class VideoFileProcessor:
     def __init__(self):
         self.micro_expression_detector = MicroExpressionDetector()
         self.lie_detection_network = LieDetectionNetwork(input_shape_3d=(50, 96, 112, 3), input_shape_2d=(96, 112, 3))
@@ -440,7 +444,7 @@ class LieDetection:
 
 if __name__ == "__main__":
     video_path = "dataset/RLDD_Deceptive/trial_lie_001.mp4"
-    detection = LieDetection()
+    detection = VideoFileProcessor()
     result = detection.getResult(video_path)
     print(result)
     

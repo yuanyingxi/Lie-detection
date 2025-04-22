@@ -35,7 +35,7 @@ class BaseUploadView(APIView):
         # 检查文件拓展名
         ext = os.path.splitext(file_obj.name)[1].lower()
         if ext not in self.get_config()['exts']:
-            return Response({'error': 'Invalid file type'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'{self.get_config()['exts']} is a Invalid file type'}, status=status.HTTP_400_BAD_REQUEST)
         # 检查文件大小
         if file_obj.size > self.get_config()['max_size'] * 1024 * 1024:
             return Response({'error': 'File too large'}, status=status.HTTP_400_BAD_REQUEST)
@@ -104,7 +104,15 @@ class EEGUploadView(BaseUploadView):
         try:
             eegFileProcessor = EegFileProcessor()
             output = eegFileProcessor.predict(file_obj)
-            return output
+
+            Response_data = {
+                "output": output,
+                "modality": self.file_type,
+                "confidence": 1 - abs(output - round(output)),
+                "result": "说谎" if output < 0.5 else "诚实"
+            }
+
+            return Response_data
 
         except Exception as e:
             return {'error': 'EEG 处理失败', 'detail': str(e)}
@@ -113,16 +121,51 @@ class EEGUploadView(BaseUploadView):
 # TODO: ECG 处理
 class ECGUploadView(BaseUploadView):
     file_type = 'ecg'
-    allowed_extensions = ['.csv', 'acq']
+    allowed_extensions = ['.csv', '.acq']
     max_size_mb = 100  # 100MB
 
-    # 处理上传的 EEG 文件
+    # 处理上传的 ECG 文件
     def process_file(self, file_obj):
         try:
             ecgFileProcessor = EcgFileProcessor()
             ecg_signal, sampling_rate = load_ecg_from_csv(file_obj)
             output = ecgFileProcessor.predict_proba(ecg_signal, sampling_rate)
-            return output
+
+            Response_data = {
+                "output": output,
+                "modality": self.file_type,
+                "confidence": 1 - abs(output - round(output)),
+                "result": "诚实" if output < 0.5 else "说谎"
+            }
+
+            return Response_data
 
         except Exception as e:
             return {'error': 'ECG 处理失败', 'detail': str(e)}
+
+
+# TODO: Video 处理
+class VideoUploadView(BaseUploadView):
+    file_type = 'video'
+    allowed_extensions = ['.mp4']
+    max_size_mb = 150  # 100MB
+
+    # 处理上传的 Video 文件
+    def process_file(self, file_obj):
+        try:
+            # videoFileProcessor = VideoFileProcessor()
+            # output = videoFileProcessor.getResult(file_obj)
+            output = 0.5
+
+            Response_data = {
+                "output": 1,
+                "modality": self.file_type,
+                "confidence": 1 - abs(output - round(output)),
+                "result": "说谎" if output < 0.5 else "诚实"
+            }
+
+            return Response_data
+
+        except Exception as e:
+            return {'error': 'Video 处理失败', 'detail': str(e)}
+
