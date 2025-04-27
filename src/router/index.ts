@@ -9,7 +9,7 @@ const routes = [
   { 
     path: '/Upload',
     name: 'Upload',
-    component: () => import('@/views/FileUpload.vue') 
+    component: () => import('@/views/FileUploadView.vue') 
   },
   {
     path: '/Visualization',

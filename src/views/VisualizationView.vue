@@ -1,13 +1,21 @@
+<!-- views/VisualizationView.vue -->
+
 <template>
   <el-container class="main-container">
     <!-- 头部导航 -->
-    <el-header class="app-header">
-      <h2>多模态测谎分析系统</h2>
-    </el-header>
 
     <el-container>
       <!-- 侧边栏 -->
       <el-aside width="220px" class="app-sidebar">
+        <div class="upload-container">
+          <!-- 返回按钮 -->
+          <div class="nav-back">
+            <el-button link type="primary" @click="goBack" class="back-btn">
+              <el-icon style="margin-right: 8px;"><ArrowLeft /></el-icon>
+              返回
+            </el-button>
+          </div>
+        </div>
         <el-menu
           default-active="1"
           background-color="#545c64"
@@ -38,15 +46,6 @@
               <div class="card-title">{{ metric.name }}</div>
               <div class="card-value">
                 {{ metric.value }} <span class="card-unit">{{ metric.unit }}</span>
-              </div>
-              <div class="card-trend">
-                <el-icon :color="metric.trend > 0 ? '#F56C6C' : '#67C23A'">
-                  <CaretTop v-if="metric.trend > 0" />
-                  <CaretBottom v-else />
-                </el-icon>
-                <span :style="{ color: metric.trend > 0 ? '#F56C6C' : '#67C23A' }">
-                  {{ metric.trend > 0 ? '+' : '' }}{{ metric.trend }}%
-                </span>
               </div>
             </el-card>
           </el-col>
@@ -97,16 +96,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
-import { DataAnalysis, Document, Setting, CaretTop, CaretBottom } from '@element-plus/icons-vue'
-import { eeg_data, ecg_data } from '@/stores/data'
+import { DataAnalysis, Document, Setting } from '@element-plus/icons-vue'
+import useVisualDataStore from '@/stores/visualData'
+import _ from 'lodash'
+import { useRouter } from 'vue-router'
+import { ArrowLeft } from '@element-plus/icons-vue'
+import { 
+  useConfidenceStore, 
+  useUploadStore
+} from '@/stores/globalData'
+
+// 创建 store
+const visualDataStore = useVisualDataStore()
+const confidenceDataStore = useConfidenceStore()
+const uploadStore = useUploadStore()
+
 // 响应式数据
 const physioChart = ref(null)
 const radarChart = ref(null)
 const brainChart = ref(null)
 // 指标数据
-const metrics = ref([{ name: '可信度评分', value: 91.0, unit: '分', trend: -8 }])
+const metrics = ref([{ 
+  name: '可信度评分', 
+  value: ((uploadStore.uploadResult?.data.confidence ?? 0 ) * 100).toFixed(2), 
+  unit: '分' 
+}])
 
 // 雷达图数据
 const radarData = ref({
@@ -117,14 +133,24 @@ const radarData = ref({
   ],
   seriesData: [
     {
-      // value: [脑电，心电，面部]
-      value: [60, 72, 71],
+      value: [
+        confidenceDataStore.eegconfidence?.toFixed(2),
+        confidenceDataStore.ecgconfidence?.toFixed(2),
+        confidenceDataStore.videoconfidence?.toFixed(2),
+      ],
       name: '当前分析',
     },
   ],
 })
 let radarChartInstance: echarts.ECharts
 
+// 返回主页
+const router = useRouter()
+const goBack = () => {
+  router.push({ name: 'Home' })
+}
+
+// 雷达图更新
 function ff() {
   radarChartInstance.setOption({
     // 提示框组件当鼠标悬停在雷达图的数据点（如多边形顶点）时，会显示该数据项的名称和具体数值。
@@ -148,75 +174,78 @@ function ff() {
     ],
   })
 }
+
 watch(
   radarData,
   () => {
     ff()
   },
-  {
-    deep: true,
-  },
+  { deep: true },
 )
+
 // 初始化图表
 const initCharts = () => {
-  // 生理信号趋势图
+  // 心电信号图
   const physioChartInstance = echarts.init(physioChart.value)
-  physioChartInstance.setOption({
-    grid: { top: 40, right: 30, bottom: 30, left: 50 },
-    xAxis: {
-      type: 'value',
-      min: 0,
-      max: 10,
-      interval: 2,
-      axisLabel: { interval: 2 },
-      splitLine: { show: true },
-    },
-    yAxis: {
-      type: 'value',
-      min: -0.1,
-      max: 0.3,
-      interval: 0.05,
-    },
-    series: [
-      {
-        type: 'line',
-        data: ecg_data[0],
-        symbol: 'none', // 隐藏数据点符号
-        lineStyle: { color: '#2f89cf', width: 2 },
-        areaStyle: { color: 'rgba(47,137,207,0.1)' },
+  if (visualDataStore.ecg_data?.length > 0) {
+    // console.log(visualDataStore.ecg_data)
+    physioChartInstance.setOption({
+      grid: { top: 40, right: 30, bottom: 30, left: 50 },
+      xAxis: {
+        type: 'value',
+        interval: 2,
+        axisLabel: { 
+          interval: 2,
+          show: false,
+        },
+        splitLine: { show: false },
       },
-    ],
-    dataZoom: [{ type: 'inside', start: 0, end: 30 }],
-  })
+      yAxis: {
+        type: 'value',
+      },
+      series: [
+        {
+          type: 'line',
+          data: visualDataStore.ecg_data,
+          symbol: 'none', // 隐藏数据点符号
+          lineStyle: { color: '#2f89cf', width: 2 },
+          areaStyle: { color: 'rgba(47,137,207,0.1)' },
+        },
+      ],
+      dataZoom: [{ type: 'inside', start: 0, end: 30 }],
+    })
+  }
 
+  // 脑电信号图
   const brainChartInstance = echarts.init(brainChart.value)
-  brainChartInstance.setOption({
-    grid: { top: 40, right: 30, bottom: 30, left: 50 },
-    xAxis: {
-      type: 'value',
-      min: 0,
-      max: 10,
-      interval: 2,
-      axisLabel: { interval: 2 },
-      splitLine: { show: true },
-    },
-    yAxis: {
-      type: 'value',
-      // min: -0.1,
-      // max: 0.3,
-      interval: 0.05,
-    },
-    series: [
-      {
-        type: 'line',
-        data: eeg_data[0].slice(0, 3000),
-        symbol: 'none', // 隐藏数据点符号
-        lineStyle: { color: '#2f89cf', width: 2 },
-        areaStyle: { color: 'rgba(47,137,207,0.1)' },
+  if (visualDataStore.eeg_data?.length > 0) {
+    // 提取x和y数据并合并为坐标对
+    brainChartInstance.setOption({
+      grid: { top: 40, right: 30, bottom: 30, left: 50 },
+      xAxis: {
+        type: 'value',
+        interval: 2,
+        axisLabel: { 
+          interval: 2,
+          show: false,
+        },
+        splitLine: { show: false },
       },
-    ],
-    dataZoom: [{ type: 'inside', start: 0, end: 30 }],
-  })
+      yAxis: {
+        type: 'value',
+      },
+      series: [
+        {
+          type: 'line',
+          data: visualDataStore.eeg_data[0],
+          symbol: 'none', // 隐藏数据点符号
+          lineStyle: { color: '#2f89cf', width: 2 },
+          areaStyle: { color: 'rgba(47,137,207,0.1)' },
+        },
+      ],
+      dataZoom: [{ type: 'inside', start: 0, end: 30 }],
+    })
+  }
 
   // 雷达图
   radarChartInstance = echarts.init(radarChart.value)
@@ -236,8 +265,35 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.nav-back {
+  margin: 10px; 
+}
+
+.back-btn {
+  border-radius: 18px;
+  padding: 10px;
+
+  .el-icon {
+    margin-left: 8px;
+  }
+}
+
 .main-container {
   height: 100vh;
+}
+
+.app-sidebar {
+  border-radius: 10px;
+  background-color: #d0d0d0;
+}
+
+.el-menu-item {
+  background-color: #d0d0d0;
+  color: black;
+}
+
+.el-menu-item:hover {
+  background-color: #909399;
 }
 
 .app-header {
@@ -245,10 +301,6 @@ onMounted(() => {
   color: white;
   display: flex;
   align-items: center;
-}
-
-.app-sidebar {
-  background-color: #545c64;
 }
 
 .app-main {
