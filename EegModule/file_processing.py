@@ -11,14 +11,10 @@ from .model import CNNmodel
 
 
 class Preprocessing:
-    def __init__(self, file_path):
-        self.path = file_path
-
     # 加载并合并数据
     @staticmethod
-    def load_data(path):
-        df = pd.read_csv(path)
-        return df
+    def load_data(file: str | pd.DataFrame, is_filepath=False):
+        return np.array(file) if type(is_filepath) != str else np.array(pd.read_csv(file))
 
     # 滑动窗口
     @staticmethod
@@ -46,7 +42,7 @@ class EegFileProcessor:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     def preprocessing(self, file):
-        features = np.array(Preprocessing.load_data(file))[3840:4224, :]
+        features = Preprocessing.load_data(file)[3840:4224, :]
         features = Preprocessing.extract_dwt_features(features)
         features = self.scaler.transform(features.reshape(1, -1))
         features = features.reshape(1, 1, -1)  # (samples, channels, features)

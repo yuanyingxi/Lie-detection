@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     'corsheaders',  # 必须放在所有自定义应用之前
-    "detector",
+    "detector.apps.DetectorConfig",
     "rest_framework",
     "rest_framework_simplejwt",
 ]
@@ -59,6 +59,7 @@ MIDDLEWARE = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+
     ),
 }
 

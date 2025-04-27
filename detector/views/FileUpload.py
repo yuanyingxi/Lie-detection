@@ -2,16 +2,19 @@ import os
 import uuid
 from abc import abstractmethod
 from datetime import datetime
+from io import BytesIO
 
+import numpy as np
+import pandas as pd
 from django.conf import settings
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import status
 from rest_framework.request import Request
 
-from EcgModule.predict import EcgFileProcessor, load_ecg_from_csv
-from EegModule.file_processing import EegFileProcessor
+from EcgModule.predict import load_ecg_from_csv
+from detector.views.Error import CustomAPIException
+from detector.views.models import LieDetector
 
 
 # TODO: 上传文件视图基类
@@ -19,27 +22,7 @@ from EegModule.file_processing import EegFileProcessor
 class BaseUploadView(APIView):
     # parser_class 是一个元组，包含了 MultiPartParser  (处理文件上传) 解析器类
     parser_class = (MultiPartParser, )
-    file_type = None  # 必须被子类覆盖
-    allowed_extensions = []
-    max_size_mb = 0
-
-    # 获取白名单配置
-    def get_config(self):
-        return {
-            'exts': self.allowed_extensions,
-            'max_size': self.max_size_mb
-        }
-
-    # 文件检验
-    def validate_file(self, file_obj):
-        # 检查文件拓展名
-        ext = os.path.splitext(file_obj.name)[1].lower()
-        if ext not in self.get_config()['exts']:
-            return Response({'error': f'{self.get_config()['exts']} is a Invalid file type'}, status=status.HTTP_400_BAD_REQUEST)
-        # 检查文件大小
-        if file_obj.size > self.get_config()['max_size'] * 1024 * 1024:
-            return Response({'error': 'File too large'}, status=status.HTTP_400_BAD_REQUEST)
-        return None
+    modality = None  # 必须被子类覆盖
 
     # 保存文件, 返回文件路径
     def save(self, file_obj):
@@ -47,10 +30,10 @@ class BaseUploadView(APIView):
             # 生成唯一文件名
             file_id = uuid.uuid4().hex
             ext = os.path.splitext(file_obj.name)[1].lower()
-            new_filename = f"{self.file_type}_{datetime.now().strftime('%Y%m%d')}_{file_id}{ext}"
+            new_filename = f"{self.modality}_{datetime.now().strftime('%Y%m%d')}_{file_id}{ext}"
 
             # 创建存储目录
-            save_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', self.file_type)
+            save_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', self.modality)
             os.makedirs(save_dir, exist_ok=True)
             save_path = os.path.join(save_dir, new_filename)
 
@@ -70,44 +53,44 @@ class BaseUploadView(APIView):
 
     # 上传文件
     def post(self, request: Request, *args, **kwargs):
-        upload_file = request.FILES.get('file')  # 从 FILES 字典获取文件对象
-
-        if not upload_file:  # 文件不存在
-            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if error := self.validate_file(upload_file):  # 文件校验失败
-            return error
-
         try:
-            save_path = self.save(upload_file)  # 获取保存路径
-            result = self.process_file(save_path)  # 处理文件
+            file = request.FILES.get('file')  # 从 FILES 字典获取文件对象
+            # file = self.save(upload_file)  # 获取保存路径
+            result = self.process_file(file)  # 处理文件
+            return Response({"status": "success", "data": result}, status=200)
 
-            # 构造响应数据
-            response_data = {
-                'status': 'success',
-                'data': result,
-            }
-            return Response(response_data, status=status.HTTP_201_CREATED)
-
+        except CustomAPIException as e:
+            return Response({"status": "error", "data": {"error": e.detail, "code": e.status_code}}, status=200)
         except Exception as e:
-            return Response({'error': '文件保存失败', 'detail': str(e)},
-                            status=status.HTTP_400_BAD_REQUEST)
+                return Response({"status": "error", "data": {"error": "服务器内部错误", "code": 500}}, status=500)
 
 # TODO: EEG 处理
 class EEGUploadView(BaseUploadView):
-    file_type = 'eeg'
-    allowed_extensions = ['.csv']
-    max_size_mb = 100  # 100MB
+    modality = 'eeg'
 
     # 处理上传的 EEG 文件
-    def process_file(self, file_obj):
+    def process_file(self, file):
+        if file.name.endswith('.csv'):
+            content = file.read()
+            file_data = pd.read_csv(BytesIO(content))  # shape: (T, ch)
         try:
-            eegFileProcessor = EegFileProcessor()
-            output = eegFileProcessor.predict(file_obj)
+            eegDetector = LieDetector().eegLoader
+            output = eegDetector.predict(file_data)
 
+            """ 构建响应数据 """
+            sequence = np.linspace(0, 100, file_data.shape[0])
+            data = [
+                    [[sequence[t], file_data.values[t][ch]] for t in range(file_data.shape[0])]
+                    for ch in range(file_data.shape[1])
+                ]
             Response_data = {
+                "raw": {
+                    "electrodes": file_data.columns.tolist(),
+                    "data": data
+                },
+                "logo": self.modality,  # logo 用于用于确定当前正在处理的模态，modality 用于显示最终处理了哪些模态
                 "output": output,
-                "modality": self.file_type,
+                "modality": self.modality,
                 "confidence": 1 - abs(output - round(output)),
                 "result": "说谎" if output < 0.5 else "诚实"
             }
@@ -115,25 +98,43 @@ class EEGUploadView(BaseUploadView):
             return Response_data
 
         except Exception as e:
-            return {'error': 'EEG 处理失败', 'detail': str(e)}
+            print(e)
+            raise CustomAPIException(f"EEG 文件格式不正确，处理失败")
 
 
 # TODO: ECG 处理
 class ECGUploadView(BaseUploadView):
-    file_type = 'ecg'
-    allowed_extensions = ['.csv', '.acq']
-    max_size_mb = 100  # 100MB
+    modality = 'ecg'
+
+    # 去除时间列
+    def drop_time_cols(self, df: pd.DataFrame):
+        time_col = [col for col in df.columns if 'time' in col.lower()]
+        df = df.drop(columns=time_col)
+        return df
 
     # 处理上传的 ECG 文件
-    def process_file(self, file_obj):
+    def process_file(self, file):
+        if file.name.endswith('.csv'):
+            content = file.read()
+            df = pd.read_csv(BytesIO(content))
+            file_data = self.drop_time_cols(df)  # 去除时间列
+            file = self.save(file)
         try:
-            ecgFileProcessor = EcgFileProcessor()
-            ecg_signal, sampling_rate = load_ecg_from_csv(file_obj)
-            output = ecgFileProcessor.predict_proba(ecg_signal, sampling_rate)
+            ecgDetector = LieDetector().ecgLoader
+            ecg_signal, sampling_rate = load_ecg_from_csv(file)
+            output = ecgDetector.predict_proba(ecg_signal, sampling_rate)
 
+            """ 构建响应数据 """
+            file_data = file_data.iloc[::16, :]
+            sequence = np.linspace(0, 100, file_data.shape[0])
+            data = [
+                [sequence[t], file_data.values[t][0]] for t in range(file_data.shape[0])
+            ]
             Response_data = {
+                "raw": data,
+                "logo": self.modality,
                 "output": output,
-                "modality": self.file_type,
+                "modality": self.modality,
                 "confidence": 1 - abs(output - round(output)),
                 "result": "诚实" if output < 0.5 else "说谎"
             }
@@ -141,25 +142,25 @@ class ECGUploadView(BaseUploadView):
             return Response_data
 
         except Exception as e:
-            return {'error': 'ECG 处理失败', 'detail': str(e)}
+            print(e)
+            raise CustomAPIException(f"ECG 文件格式不正确，处理失败")
 
 
 # TODO: Video 处理
 class VideoUploadView(BaseUploadView):
     file_type = 'video'
-    allowed_extensions = ['.mp4']
-    max_size_mb = 150  # 100MB
 
     # 处理上传的 Video 文件
     def process_file(self, file_obj):
         try:
-            # videoFileProcessor = VideoFileProcessor()
-            # output = videoFileProcessor.getResult(file_obj)
+            # eegDetector = LieDetector().eegLoader
+            # output = eegDetector.predict(file_obj)
             output = 0.5
 
             Response_data = {
+                "logo": self.modality,
                 "output": 1,
-                "modality": self.file_type,
+                "modality": self.modality,
                 "confidence": 1 - abs(output - round(output)),
                 "result": "说谎" if output < 0.5 else "诚实"
             }
@@ -168,4 +169,5 @@ class VideoUploadView(BaseUploadView):
 
         except Exception as e:
             return {'error': 'Video 处理失败', 'detail': str(e)}
+
 
