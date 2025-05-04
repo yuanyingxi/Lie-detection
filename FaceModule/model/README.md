@@ -1,3 +1,3 @@
-lie_detection_model.h5  cnn模型
+model/lie_detection_model.pth  cnn模型
 
-lstm_model.h5  lstm模型
+model/micro_expression_lstm.pth  lstm模型
