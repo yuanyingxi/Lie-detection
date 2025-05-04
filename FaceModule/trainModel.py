@@ -598,9 +598,9 @@ def save_sequences_to_folder(sequences, base_save_path='saved_sequences'):
     print(f"所有序列已保存到：{base_save_path}")
 
 
-truth_videos_folder = 'dataset/RLDD_Deceptive'
-lie_videos_folder = 'dataset/RLDD_Truthful'
-video_path = 'dataset/RLDD_Deceptive/trial_lie_001.mp4'
+truth_videos_folder = 'dataset/Deceptive'
+lie_videos_folder = 'dataset/Truthful'
+video_path = 'dataset/Deceptive/trial_lie_001.mp4'
 micro_expression_detector = MicroExpressionDetector()
 # img = micro_expression_detector.detect_micro_expression_intervals(video_path)
 # save_sequences_to_folder(sequences=img)
