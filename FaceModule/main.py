@@ -376,16 +376,6 @@ class LieDetectionNetwork(nn.Module):
         output = self.fc(combined)
         return output
 
-        # x3d = self.conv3d_branch(input_3d)
-        # x3d = x3d.view(x3d.size(0), -1)
-        #
-        # x2d = self.conv2d_branch(input_2d)
-        # x2d = x2d.view(x2d.size(0), -1)
-        #
-        # combined = torch.cat((x3d, x2d), dim=1)
-        # output = self.fc(combined)
-        # return output
-
     def extract_video_frames(self, video_path, max_frames):
         """从视频中提取帧"""
         cap = cv2.VideoCapture(video_path)
@@ -577,28 +567,64 @@ class LieDetectionNetwork(nn.Module):
         print(f"已从 {cnn_model_path} 加载模型")
 
 
-# 训练模型并保存模型
-def save_sequences_to_folder(sequences, base_save_path='saved_sequences'):
-    os.makedirs(base_save_path, exist_ok=True)
-    for idx, sequence in enumerate(sequences):
-        sequence_folder = os.path.join(base_save_path, f'sequence_{idx}')
-        os.makedirs(sequence_folder, exist_ok=True)
-        for frame_idx, frame in enumerate(sequence):
-            save_path = os.path.join(sequence_folder, f'frame_{frame_idx:04d}.jpg')
-            cv2.imwrite(save_path, frame)
-    print(f"所有序列已保存到：{base_save_path}")
+def train_modal(truth_videos_folder='dataset/Deceptive_test', lie_videos_folder='dataset/Truthful_test'):
+    """"
+    训练lstm模型和cnn模型
+    :param truth_videos_folder:
+    :param lie_videos_folder:
+    :return:
+    """
+    micro_expression_detector = MicroExpressionDetector()
+    micro_expression_detector.train_lstm_model(truth_videos_folder=truth_videos_folder, lie_videos_folder=lie_videos_folder)
+    lie_detection_network = LieDetectionNetwork()
+    lie_detection_network.train_model(truth_videos_dir=truth_videos_folder, lie_videos_dir=lie_videos_folder)
 
 
-truth_videos_folder = 'dataset/Deceptive_test'
-lie_videos_folder = 'dataset/Truthful_test'
-video_path = 'dataset/Deceptive/1.mp4'
-micro_expression_detector = MicroExpressionDetector()
-# img = micro_expression_detector.detect_micro_expression_intervals(video_path)
-# save_sequences_to_folder(sequences=img)
+class FaceFileProcessor:
+    def __init__(self):
+        self.micro_expression_detector = MicroExpressionDetector()
+        self.lie_detection_network = LieDetectionNetwork()
 
-# micro_expression_detector.train_lstm_model(truth_videos_folder, lie_videos_folder)
-lie_detection_network = LieDetectionNetwork()
-lie_detection_network.train_model(truth_videos_folder, lie_videos_folder)
+    def process_video(self, video_path):
+        """
+        处理单个mp4视频
+        :return:
+        """
+        intervals = self.micro_expression_detector.detect_micro_expression_intervals(video_path)
+        # 根据间隔进行预测
+        prediction = self.lie_detection_network.predict_from_intervals(intervals)
+        return prediction
+
+    def predict(self, input_path):
+        results = {}
+
+        if os.path.isfile(input_path) and input_path.endswith('.mp4'):
+            # 输入是一个视频文件
+            prediction = self.process_video(input_path)
+            video_name = os.path.basename(input_path)
+            results[video_name] = prediction
+
+        elif os.path.isdir(input_path):
+            # 输入是一个文件夹
+            for filename in os.listdir(input_path):
+                if filename.endswith('.mp4'):
+                    video_path = os.path.join(input_path, filename)
+                    prediction = self.process_video(video_path)
+                    results[filename] = prediction
+
+        else:
+            print(f"输入路径无效：{input_path}")
+
+        return results
+
+
+if __name__ == "__main__":
+    process_path = 'dataset/Deceptive/1.mp4'
+    process_folder = 'dataset/Truthful_test'
+    faceFileProcessor = FaceFileProcessor()
+    output = faceFileProcessor.predict(process_path)
+    print(output)
+
 
 
 
