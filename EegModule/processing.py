@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from torch import optim
 from torch.utils.data import TensorDataset, DataLoader
 
-from .model import *
+from model import *
 
 
 # 加载并合并数据
@@ -45,7 +45,7 @@ def extract_dwt_features(segments, wavelet='db4', level=4):
 
 
 def train_model(model, train_loader, test_loader, criterion, optimizer, epochs=15):
-    save_path = r"best_model.pt"
+    save_path = r"best_model.pth"
     best_loss = float('inf')
     for epoch in range(epochs):
         model.train()
@@ -98,16 +98,16 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, epochs=1
 
 if __name__ == '__main__':
     # 数据的地址
-    truth_path = '../datasets/LieWaves/Truth_Sessions/Raw/'
-    lie_path = '../datasets/LieWaves/Lie_Sessions/Raw/'
+    truth_path = './datasets/LieWaves/Truth_Sessions/Raw/'
+    lie_path = './datasets/LieWaves/Lie_Sessions/Raw/'
 
     # 加载并合并数据
     truth_data = load_and_concatenate_data(truth_path)
     lie_data = load_and_concatenate_data(lie_path)
 
     # 分割数据
-    window_size = 384
-    overlap = 128
+    window_size = 128
+    overlap = 64
     truth_segments = segment_data(truth_data, window_size, overlap)
     lie_segments = segment_data(lie_data, window_size, overlap)
 
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
     # 归一化
-    # scaler = StandardScaler()
+    scaler = StandardScaler()
     scaler = joblib.load('data_scaler.pkl')
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
@@ -154,9 +154,9 @@ if __name__ == '__main__':
     # 训练模型
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
-    model = CNNmodel(X_train_cnn.shape[1]).to(device)
+    model = MyModel().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.BCELoss()
 
-    train_model(model, train_loader, test_loader, criterion, optimizer, epochs=10)
+    train_model(model, train_loader, test_loader, criterion, optimizer, epochs=30)
 

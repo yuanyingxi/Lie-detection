@@ -1,10 +1,12 @@
 import torch
-from torch import nn
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 import torch.nn.functional as F
 
 
 class CNNmodel(nn.Module):
-    def __init__(self, dim):
+    def __init__(self):
         super(CNNmodel, self).__init__()
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=256, kernel_size=3)
         self.bn1 = nn.BatchNorm1d(256)
@@ -21,32 +23,74 @@ class CNNmodel(nn.Module):
         self.pool3 = nn.MaxPool1d(2)
         self.drop3 = nn.Dropout(0.25)
 
-        in_dim = self.calculate_fc1_input(dim, 3)
-        self.fc1 = nn.Linear(in_dim, 256)
-        self.fc2 = nn.Linear(256, 128)
-        self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, 1)
-
-    def forward(self, x):
-        # x.shape = (batch_size, 1, dim)
+    def forward(self, x):  # x:[b,1,770]
+        x = x.squeeze().unsqueeze(1)
         x = self.drop1(self.pool1(self.bn1(F.relu(self.conv1(x)))))
         x = self.drop2(self.pool2(self.bn2(F.relu(self.conv2(x)))))
         x = self.drop3(self.pool3(self.bn3(F.relu(self.conv3(x)))))
+        return x
 
-        x = x.view(x.size(0), -1)
 
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
+"""
+input:[b,1,770]
+output:[b,1]
+"""
+"""
+rnn中一般需要将维度变换成[770,b,1]
+"""
 
-        output = torch.sigmoid(x)
+
+class MyModel(nn.Module):
+    def __init__(self):
+        super(MyModel, self).__init__()
+        self.rnn1 = nn.LSTM(64, 128, 2, batch_first=True)
+        self.rnn2 = nn.LSTM(128, 64, 1, batch_first=True)
+        self.drop1 = nn.Dropout(0.25)
+        self.drop2 = nn.Dropout(0.25)
+        self.cnn = CNNmodel()
+        self.f = nn.Sequential(
+            nn.Linear(64 * 64, 64 * 16),
+            nn.ReLU(),
+            # nn.Dropout(0.25),
+            nn.Linear(64 * 16, 256 * 2),
+            nn.ReLU(),
+            # nn.Dropout(0.25),
+            nn.Linear(256 * 2, 128),
+            nn.ReLU(),
+            # nn.Dropout(0.25),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            # nn.Dropout(0.25),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            # nn.Dropout(0.25),
+            nn.Linear(32, 1),
+            nn.Sigmoid()
+        )
+        self.conv_layers = nn.Sequential(
+            nn.Conv1d(64, 64, 3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveMaxPool1d(64)  # 强制输出长度64
+        )
+
+    def forward(self, x):
+        # print(x.shape)
+        x = self.extra_feature(x)
+        output = self.f(x)
         return output
 
-    def calculate_fc1_input(self, dim, layer_num):
-        L = dim
-        for i in range(layer_num):
-            L = L - 2
-            L = (L - 2) // 2 + 1
-        return 64 * L
+    def extra_feature(self, x):
+        x = self.cnn(x)  # 输入的是[b,770,1]
+        x = x.permute(0, 2, 1)
+        x, _ = self.rnn1(x)
+        x = self.drop1(x)
+        x, _ = self.rnn2(x)
+        x = self.drop2(x)
+        x = x.permute(0, 2, 1)
+        x = self.conv_layers(x)
+        x = x.reshape(x.size(0), -1)  # 将batch之后的维度展平
+        return x
 
+
+if __name__ == '__main__':
+    print('hh')
