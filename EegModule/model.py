@@ -76,9 +76,13 @@ class MyModel(nn.Module):
     def forward(self, x):
         # print(x.shape)
         x = self.extra_feature(x)
+        x = x.permute(0, 2, 1)
+        x = self.conv_layers(x)
+        x = x.reshape(x.size(0), -1)  # 将batch之后的维度展平
         output = self.f(x)
         return output
 
+    # 可用于多模态调用
     def extra_feature(self, x):
         x = self.cnn(x)  # 输入的是[b,770,1]
         x = x.permute(0, 2, 1)
@@ -86,9 +90,6 @@ class MyModel(nn.Module):
         x = self.drop1(x)
         x, _ = self.rnn2(x)
         x = self.drop2(x)
-        x = x.permute(0, 2, 1)
-        x = self.conv_layers(x)
-        x = x.reshape(x.size(0), -1)  # 将batch之后的维度展平
         return x
 
 
