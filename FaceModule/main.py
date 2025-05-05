@@ -352,16 +352,39 @@ class LieDetectionNetwork(nn.Module):
             nn.Linear(128, 2)
         )
 
-    def forward(self, input_3d, input_2d):
-        x3d = self.conv3d_branch(input_3d)
-        x3d = x3d.view(x3d.size(0), -1)
+    def forward(self, input_3d, input_2d, multimodal=False):
+        B = input_3d.size(0)
 
-        x2d = self.conv2d_branch(input_2d)
-        x2d = x2d.view(x2d.size(0), -1)
+        # 3D 分支
+        x3d = self.conv3d_branch(input_3d)  # [B, C, T, H, W]
+        x3d_feat = x3d.permute(0, 2, 1, 3, 4)  # [B, T, C, H, W]
+        x3d_feat = x3d_feat.contiguous().view(B, x3d_feat.size(1), -1)  # [B, T, d1]
 
-        combined = torch.cat((x3d, x2d), dim=1)
+        # 2D 分支
+        x2d = self.conv2d_branch(input_2d)  # [B, C, H, W]
+        x2d_feat = x2d.view(B, 1, -1).repeat(1, x3d_feat.size(1), 1)  # [B, T, d2]
+
+        # 多模态特征融合输出（不进行分类）
+        if multimodal:
+            fused = torch.cat((x3d_feat, x2d_feat), dim=2)  # [B, T, d1+d2]
+            return fused
+
+        # 分类路径（使用原始逻辑）
+        x3d_flat = x3d.view(B, -1)
+        x2d_flat = x2d.view(B, -1)
+        combined = torch.cat((x3d_flat, x2d_flat), dim=1)  # [B, flatten_3d + flatten_2d]
         output = self.fc(combined)
         return output
+
+        # x3d = self.conv3d_branch(input_3d)
+        # x3d = x3d.view(x3d.size(0), -1)
+        #
+        # x2d = self.conv2d_branch(input_2d)
+        # x2d = x2d.view(x2d.size(0), -1)
+        #
+        # combined = torch.cat((x3d, x2d), dim=1)
+        # output = self.fc(combined)
+        # return output
 
     def extract_video_frames(self, video_path, max_frames):
         """从视频中提取帧"""
@@ -400,6 +423,117 @@ class LieDetectionNetwork(nn.Module):
         mid_frame = frames[len(frames) // 2]
         return np.transpose(mid_frame, (2, 0, 1))  # (C, H, W)
 
+    def train_model(self, truth_videos_dir, lie_videos_dir, epochs=20, batch_size=8):
+        """
+        训练模型，输入为真话与谎话的视频文件夹
+        :param truth_videos_dir: str，真话视频文件夹路径
+        :param lie_videos_dir: str，谎话视频文件夹路径
+        """
+        micro_expression_detector = MicroExpressionDetector()
+        X_3d, X_2d, y = [], [], []
+
+        # 处理真话视频
+        truth_video_paths = glob.glob(os.path.join(truth_videos_dir, "*.mp4"))  # 可以根据需要换成*.avi等
+        for video_path in truth_video_paths:
+            micro_expression_intervals = micro_expression_detector.detect_micro_expression_intervals(video_path)
+            frames = []
+            for interval in micro_expression_intervals:
+                frames.extend([frame for frame in interval if frame is not None])
+            if frames:
+                X_3d.append(self.prepare_3d_input(frames))
+                X_2d.append(self.prepare_2d_input(frames))
+                y.append(0)  # 真话标签为0
+
+        # 处理谎话视频
+        lie_video_paths = glob.glob(os.path.join(lie_videos_dir, "*.mp4"))
+        for video_path in lie_video_paths:
+            micro_expression_intervals = micro_expression_detector.detect_micro_expression_intervals(video_path)
+            frames = []
+            for interval in micro_expression_intervals:
+                frames.extend([frame for frame in interval if frame is not None])
+            if frames:
+                X_3d.append(self.prepare_3d_input(frames))
+                X_2d.append(self.prepare_2d_input(frames))
+                y.append(1)  # 谎话标签为1
+
+        if not X_3d:
+            print("没有有效的数据用于训练。")
+            return
+
+        X_3d = np.array(X_3d)
+        X_2d = np.array(X_2d)
+        y = np.array(y)
+
+        dataset = TensorDataset(
+            torch.tensor(X_3d, dtype=torch.float32),
+            torch.tensor(X_2d, dtype=torch.float32),
+            torch.tensor(y, dtype=torch.long)
+        )
+
+        train_size = int(0.8 * len(dataset))
+        val_size = len(dataset) - train_size
+        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size)
+
+        self.to(self.device)
+        optimizer = optim.Adam(self.parameters(), lr=0.001)
+        criterion = nn.CrossEntropyLoss()
+
+        for epoch in range(epochs):
+            self.train()
+            total_loss = 0
+            correct_train = 0
+            total_train = 0
+
+            # Training phase
+            for batch_3d, batch_2d, labels in train_loader:
+                batch_3d = batch_3d.to(self.device)
+                batch_2d = batch_2d.to(self.device)
+                labels = labels.to(self.device)
+
+                optimizer.zero_grad()
+                outputs = self.forward(batch_3d, batch_2d)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                total_loss += loss.item()
+
+                _, predicted = torch.max(outputs.data, 1)
+                total_train += labels.size(0)
+                correct_train += (predicted == labels).sum().item()
+
+            avg_loss = total_loss / len(train_loader)
+            train_accuracy = 100 * correct_train / total_train
+
+            # Validation phase
+            self.eval()
+            correct_val = 0
+            total_val = 0
+            with torch.no_grad():
+                for batch_3d, batch_2d, labels in val_loader:
+                    batch_3d = batch_3d.to(self.device)
+                    batch_2d = batch_2d.to(self.device)
+                    labels = labels.to(self.device)
+
+                    outputs = self.forward(batch_3d, batch_2d)
+                    _, predicted = torch.max(outputs.data, 1)
+
+                    total_val += labels.size(0)
+                    correct_val += (predicted == labels).sum().item()
+
+            val_accuracy = 100 * correct_val / total_val
+
+            # Print metrics for each epoch
+            print(
+                f"Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f}, Train Accuracy: {train_accuracy:.2f}%, Val Accuracy: {val_accuracy:.2f}%")
+
+        # 保存模型
+        self.save_model()
+        # print("训练完成，模型已保存。")
+
     def predict_from_intervals(self, micro_expression_intervals):
         """预测"""
 
@@ -429,7 +563,12 @@ class LieDetectionNetwork(nn.Module):
             probs = F.softmax(outputs, dim=1)[:, 1]
             avg_prediction = probs.mean().item()
 
-        return 1 - avg_prediction
+        return avg_prediction
+
+    def save_model(self):
+        """保存模型"""
+        torch.save(self.state_dict(), cnn_model_path)
+        print(f"模型已保存到 {cnn_model_path}")
 
     def load_model(self):
         """加载模型"""
@@ -450,48 +589,16 @@ def save_sequences_to_folder(sequences, base_save_path='saved_sequences'):
     print(f"所有序列已保存到：{base_save_path}")
 
 
-class FaceFileProcessor:
-    def __init__(self):
-        self.micro_expression_detector = MicroExpressionDetector()
-        self.lie_detection_network = LieDetectionNetwork()
+truth_videos_folder = 'dataset/Deceptive_test'
+lie_videos_folder = 'dataset/Truthful_test'
+video_path = 'dataset/Deceptive/1.mp4'
+micro_expression_detector = MicroExpressionDetector()
+# img = micro_expression_detector.detect_micro_expression_intervals(video_path)
+# save_sequences_to_folder(sequences=img)
 
-    def process_video(self, video_path):
-        """
-        处理单个mp4视频
-        :return:
-        """
-        intervals = self.micro_expression_detector.detect_micro_expression_intervals(video_path)
-        # 根据间隔进行预测
-        prediction = self.lie_detection_network.predict_from_intervals(intervals)
-        return prediction
-
-    def predict(self, input_path):
-        results = {}
-
-        if os.path.isfile(input_path) and input_path.endswith('.mp4'):
-            # 输入是一个视频文件
-            prediction = self.process_video(input_path)
-            video_name = os.path.basename(input_path)
-            results[video_name] = prediction
-
-        elif os.path.isdir(input_path):
-            # 输入是一个文件夹
-            for filename in os.listdir(input_path):
-                if filename.endswith('.mp4'):
-                    video_path = os.path.join(input_path, filename)
-                    prediction = self.process_video(video_path)
-                    results[filename] = prediction
-
-        else:
-            print(f"输入路径无效：{input_path}")
-
-        return results
+# micro_expression_detector.train_lstm_model(truth_videos_folder, lie_videos_folder)
+lie_detection_network = LieDetectionNetwork()
+lie_detection_network.train_model(truth_videos_folder, lie_videos_folder)
 
 
-if __name__ == "__main__":
-    process_path = 'dataset/RLDD_Deceptive/trial_lie_001.mp4'
-    process_folder = 'dataset/RLDD_Truthful_test'
-    faceFileProcessor = FaceFileProcessor()
-    output = faceFileProcessor.predict(process_folder)
-    print(output)
 
