@@ -38,7 +38,7 @@ db.sqlite3
 
 storage/
 
-#*.pt
+*.pt
 *.pth
 *.pkl
 *.h5
