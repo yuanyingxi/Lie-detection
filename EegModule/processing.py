@@ -6,10 +6,8 @@ from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pywt
 from sklearn.model_selection import train_test_split
-from torch import optim
-from torch.utils.data import TensorDataset, DataLoader
 
-from model import *
+from .model import *
 
 
 # 加载并合并数据
@@ -98,8 +96,8 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, epochs=1
 
 if __name__ == '__main__':
     # 数据的地址
-    truth_path = './datasets/LieWaves/Truth_Sessions/Raw/'
-    lie_path = './datasets/LieWaves/Lie_Sessions/Raw/'
+    truth_path = '../datasets/LieWaves/Truth_Sessions/Raw/'
+    lie_path = '../datasets/LieWaves/Lie_Sessions/Raw/'
 
     # 加载并合并数据
     truth_data = load_and_concatenate_data(truth_path)
@@ -128,7 +126,7 @@ if __name__ == '__main__':
 
     # 归一化
     scaler = StandardScaler()
-    scaler = joblib.load('data_scaler.pkl')
+    # scaler = joblib.load('data_scaler.pkl')
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
     # 保存归一化参数
@@ -158,5 +156,5 @@ if __name__ == '__main__':
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.BCELoss()
 
-    train_model(model, train_loader, test_loader, criterion, optimizer, epochs=30)
+    train_model(model, train_loader, test_loader, criterion, optimizer, epochs=50)
 

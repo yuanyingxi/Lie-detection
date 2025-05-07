@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.request import Request
 
-from EcgModule.predict import load_ecg_from_csv
+from EcgModule.predict import load_ecg_data
 from detector.views.Error import CustomAPIException
 from detector.views.models import LieDetector
 
@@ -114,21 +114,19 @@ class ECGUploadView(BaseUploadView):
 
     # 处理上传的 ECG 文件
     def process_file(self, file):
-        if file.name.endswith('.csv'):
+        if file.name.endswith('.acq'):
             content = file.read()
-            df = pd.read_csv(BytesIO(content))
-            file_data = self.drop_time_cols(df)  # 去除时间列
-            file = self.save(file)
+            file_data = BytesIO(content)
         try:
             ecgDetector = LieDetector().ecgLoader
-            ecg_signal, sampling_rate = load_ecg_from_csv(file)
+            ecg_signal, sampling_rate = load_ecg_data(file_data)
             output = ecgDetector.predict_proba(ecg_signal, sampling_rate)
 
             """ 构建响应数据 """
-            file_data = file_data.iloc[::16, :]
+            file_data = ecg_signal[::16]
             sequence = np.linspace(0, 100, file_data.shape[0])
             data = [
-                [sequence[t], file_data.values[t][0]] for t in range(file_data.shape[0])
+                [sequence[t], file_data[t]] for t in range(file_data.shape[0])
             ]
             Response_data = {
                 "raw": data,
@@ -153,9 +151,8 @@ class VideoUploadView(BaseUploadView):
     # 处理上传的 Video 文件
     def process_file(self, file_obj):
         try:
-            # eegDetector = LieDetector().eegLoader
-            # output = eegDetector.predict(file_obj)
-            output = 0.5
+            eegDetector = LieDetector().eegLoader
+            output = eegDetector.predict(file_obj)
 
             Response_data = {
                 "logo": self.modality,

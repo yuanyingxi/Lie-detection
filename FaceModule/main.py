@@ -1,7 +1,7 @@
 import os
 import cv2
-import dlib
 import numpy as np
+import dlib
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,7 +12,7 @@ import glob
 
 
 # 配置路径
-predictor_path = 'shape_predictor_68_face_landmarks.dat'
+predictor_path = '.shape_predictor_68_face_landmarks.dat'
 lstm_model_path = 'model/micro_expression_lstm.pth'
 cnn_model_path = 'model/lie_detection_model.pth'  # 保存模型的路径
 

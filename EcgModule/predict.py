@@ -3,13 +3,16 @@ import os
 import sys
 import warnings
 import ast
+
+import bioread
 import numpy as np
 import torch
 from scipy import signal
 from sklearn.preprocessing import StandardScaler
 
-from main import LieDetectionModel, process_ecg_signal
-from wavelet_denoising import remove_baseline_wander, wavelet_noising
+from detector.views.Error import CustomAPIException
+from .main import LieDetectionModel, process_ecg_signal
+from .wavelet_denoising import remove_baseline_wander, wavelet_noising
 
 # 禁用警告
 warnings.filterwarnings("ignore")
@@ -108,19 +111,27 @@ def load_ecg_data(input_data, sampling_rate=None):
     返回:
         tuple: (ecg_signal, sampling_rate)
     """
-    if isinstance(input_data, str):
-        # ACQ文件路径输入
-        if input_data.lower().endswith('.acq'):
-            return load_ecg_from_acq(input_data)
-        else:
-            raise ValueError("不支持的文件格式，仅支持.acq文件")
-    elif isinstance(input_data, (np.ndarray, list)):
-        # 直接数据输入
-        if sampling_rate is None:
-            raise ValueError("当传入原始数据时，必须提供sampling_rate参数")
-        return np.array(input_data), float(sampling_rate)
-    else:
-        raise TypeError("输入数据类型不支持，必须是ACQ文件路径(str)或ECG数据(np.ndarray/list)")
+    try:
+        if isinstance(input_data, str):
+            # ACQ文件路径输入
+            if input_data.lower().endswith('.acq'):
+                return load_ecg_from_acq(input_data)
+            else:
+                raise ValueError("不支持的文件格式，仅支持.acq文件")
+        else:  # 数据的输入
+            try:
+                data = bioread.read(input_data)
+            except Exception as e:
+                raise CustomAPIException(f"无法读取该 ACQ 文件，请检查文件格式")
+            if not data.channels:
+                raise CustomAPIException(f"该 ACQ 文件没有信号通道")
+            first_data = data.channels[0]
+            ecg_signal = first_data.data
+            sampling_rate = first_data.samples_per_second
+
+            return ecg_signal, sampling_rate
+    except Exception as e:
+        raise CustomAPIException(f"无法读取ECG数据: {str(e)}")
 
 
 def load_ecg_from_acq(acq_path):

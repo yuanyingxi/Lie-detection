@@ -1,6 +1,7 @@
 # views/models.py
 from EcgModule.predict import EcgFileProcessor
-from EegModule.file_processing import EegFileProcessor
+from EegModule.eeg_Loader import EEGFileProcessor
+from FaceModule.main import FaceFileProcessor
 
 
 def singleton(cls):
@@ -14,8 +15,8 @@ def singleton(cls):
 
 
 @singleton
-class LieDetector():
+class LieDetector:
     def __init__(self):
-        self.eegLoader = EegFileProcessor()
+        self.eegLoader = EEGFileProcessor()
         self.ecgLoader = EcgFileProcessor()
-        # self.faceLoader = FaceFileProcessor()
+        self.faceLoader = FaceFileProcessor()
