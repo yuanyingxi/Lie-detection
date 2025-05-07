@@ -1,6 +1,7 @@
 import os
 from typing import Union
 
+import numpy as np
 import torch
 import pandas as pd
 from numpy.f2py.auxfuncs import throw_error
@@ -11,7 +12,8 @@ from model import MyModel
 
 class EEGFileProcessor:
     def __init__(self,model_path='best_model.pt'):
-        self.model = torch.load(model_path)
+        self.model = MyModel()
+        self.model.load_state_dict(torch.load(model_path))
 
 
 
@@ -42,7 +44,7 @@ class EEGFileProcessor:
     @classmethod
     def pretreat_test(cls, df: pd.DataFrame)->torch.Tensor:
         # 分割数据,整个作为一个数据
-        data_segments = segment_data(df,len(df))
+        data_segments = np.array([df])
         # 小波变换提取特征
         data_features = extract_dwt_features(data_segments)
         # 归一化,记得看看，是joblib.load('data_scaler.pkl')还是StandardScaler()
@@ -50,5 +52,11 @@ class EEGFileProcessor:
         data_test = scaler.fit_transform(data_features)
         data_test = data_test.reshape((data_test.shape[0], data_test.shape[1], 1))
         print(data_test.shape)
-        data_test = torch.tensor(data_test,dtype=torch.float32).squeeze().unsqueeze(1)
-        return data_test.unsqueeze(0)
+        data_test = torch.tensor(data_test,dtype=torch.float32).permute(0,2,1)
+        return data_test
+
+
+if __name__ == '__main__':
+    ef = EEGFileProcessor()
+    print("hh")
+    print(ef.predict("./datasets/LieWaves/Lie_Sessions/Raw/S1S2.csv"))

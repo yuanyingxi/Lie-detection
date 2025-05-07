@@ -24,7 +24,7 @@ class CNNmodel(nn.Module):
         self.drop3 = nn.Dropout(0.25)
 
     def forward(self, x):  # x:[b,1,770]
-        x = x.squeeze().unsqueeze(1)
+        # x = x.permute(0, 2, 1)
         x = self.drop1(self.pool1(self.bn1(F.relu(self.conv1(x)))))
         x = self.drop2(self.pool2(self.bn2(F.relu(self.conv2(x)))))
         x = self.drop3(self.pool3(self.bn3(F.relu(self.conv3(x)))))
@@ -84,7 +84,7 @@ class MyModel(nn.Module):
 
     # 可用于多模态调用
     def extra_feature(self, x):
-        x = self.cnn(x)  # 输入的是[b,770,1]
+        x = self.cnn(x)  # 输入的是[b,1,770]
         x = x.permute(0, 2, 1)
         x, _ = self.rnn1(x)
         x = self.drop1(x)
