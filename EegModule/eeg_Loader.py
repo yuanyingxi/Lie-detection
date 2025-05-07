@@ -17,7 +17,7 @@ class EEGFileProcessor:
 
 
 
-    def predict(self,input_path:Union[bytes,str],encoding='utf-8'):
+    def predict(self,input_path:pd.DataFrame,encoding='utf-8'):
         # 加载testData
         data_test = self.load_data(input_path,encoding)
         self.model.eval()
@@ -29,13 +29,13 @@ class EEGFileProcessor:
 
     #从文件加载data
     @classmethod
-    def load_data(cls,path:Union[bytes,str],encoding='utf-8'):
-        df: pd.DataFrame
-        if os.path.isfile(path) and path.endswith('.csv'):
-            df = pd.read_csv(os.path.join(os.getcwd(),path))
-            df = df.dropna()
-        else:
-            df = pd.read_csv(path,encoding=encoding)
+    def load_data(cls,df:pd.DataFrame,encoding='utf-8'):
+        # df: pd.DataFrame
+        # if os.path.isfile(path) and path.endswith('.csv'):
+        #     df = pd.read_csv(os.path.join(os.getcwd(),path))
+        #     df = df.dropna()
+        # else:
+        #     df = pd.read_csv(path,encoding=encoding)
         data_test = cls.pretreat_test(df)
         #分割数据
         return data_test

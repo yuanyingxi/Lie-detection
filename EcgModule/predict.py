@@ -2,15 +2,14 @@ import argparse
 import os
 import sys
 import warnings
-
+import ast
 import numpy as np
 import torch
-import pandas as pd
 from scipy import signal
 from sklearn.preprocessing import StandardScaler
 
-from .main import LieDetectionModel, process_ecg_signal
-from .wavelet_denoising import remove_baseline_wander, wavelet_noising
+from main import LieDetectionModel, process_ecg_signal
+from wavelet_denoising import remove_baseline_wander, wavelet_noising
 
 # 禁用警告
 warnings.filterwarnings("ignore")
@@ -96,51 +95,104 @@ class EcgFileProcessor:
         return lie_prob
 
 
-def load_ecg_from_csv(csv_path):
-    """从CSV文件加载ECG数据"""
-    df = pd.read_csv(csv_path)
+def load_ecg_data(input_data, sampling_rate=None):
+    """
+    加载ECG数据，支持两种输入格式:
+    1. ACQ文件路径
+    2. 直接的ECG信号数据数组
 
-    # 检测ECG信号列
-    if 'ECG Signal' not in df.columns:
-        possible_ecg_cols = [col for col in df.columns if 'ecg' in col.lower() or 'signal' in col.lower()]
-        if not possible_ecg_cols:
-            raise ValueError("在CSV文件中找不到ECG信号列")
-        ecg_col = possible_ecg_cols[0]
+    参数:
+        input_data: 可以是ACQ文件路径(str)或ECG信号数据(np.ndarray/list)
+        sampling_rate: 当input_data是数组时需要提供采样率
+
+    返回:
+        tuple: (ecg_signal, sampling_rate)
+    """
+    if isinstance(input_data, str):
+        # ACQ文件路径输入
+        if input_data.lower().endswith('.acq'):
+            return load_ecg_from_acq(input_data)
+        else:
+            raise ValueError("不支持的文件格式，仅支持.acq文件")
+    elif isinstance(input_data, (np.ndarray, list)):
+        # 直接数据输入
+        if sampling_rate is None:
+            raise ValueError("当传入原始数据时，必须提供sampling_rate参数")
+        return np.array(input_data), float(sampling_rate)
     else:
-        ecg_col = 'ECG Signal'
+        raise TypeError("输入数据类型不支持，必须是ACQ文件路径(str)或ECG数据(np.ndarray/list)")
 
-    # 提取ECG信号
-    ecg_signal = df[ecg_col].values
 
-    # 从时间列计算采样率（如果可用）
-    sampling_rate = 250  # 默认值
-    if 'Time (s)' in df.columns:
-        time_diff = np.diff(df['Time (s)'].values)
-        sampling_rate = 1.0 / np.mean(time_diff)
+def load_ecg_from_acq(acq_path):
+    """从ACQ文件加载ECG数据（直接读取第一个通道）"""
+    try:
+        import bioread
+    except ImportError:
+        raise ImportError("读取ACQ文件需要bioread库，请先安装: pip install bioread")
 
-    return ecg_signal, sampling_rate
+    # 检查文件是否存在
+    if not os.path.exists(acq_path):
+        raise FileNotFoundError(f"ACQ文件 {acq_path} 未找到")
+
+    # 读取ACQ文件
+    data = bioread.read_file(acq_path)
+
+    # 检查是否有通道数据
+    if not data.channels:
+        raise ValueError("ACQ文件中没有通道数据")
+
+    # 获取第一个通道的数据和采样率
+    first_channel = data.channels[0]
+    sampling_rate = first_channel.samples_per_second
+    channel_data = first_channel.data
+
+    return channel_data, sampling_rate
+
 
 if __name__ == "__main__":
     # 设置参数解析器
     parser = argparse.ArgumentParser(description='ECG说谎检测预测')
-    parser.add_argument('input_csv', type=str, help='输入ECG信号的CSV文件路径')
+    parser.add_argument('--input_type', type=str, required=True,
+                        choices=['acq', 'array'],
+                        help='输入类型: acq 或 array')
+    parser.add_argument('--input_data', type=str, required=True,
+                        help='输入数据: ACQ文件路径或ECG数组字符串')
     parser.add_argument('--model_path', type=str, default='lie_detection_model.pth',
                         help='预训练模型路径 (默认为 lie_detection_model.pth)')
+    parser.add_argument('--sampling_rate', type=float,
+                        help='当输入类型为array时需要提供采样率')
     args = parser.parse_args()
-
-    # 检查输入文件
-    if not os.path.exists(args.input_csv):
-        print(f"错误: 输入文件 {args.input_csv} 不存在")
 
     # 初始化检测器
     try:
         detector = EcgFileProcessor(args.model_path)
     except Exception as e:
         print(f"加载模型失败: {str(e)}")
+        sys.exit(1)
 
     # 加载并预测ECG数据
     try:
-        ecg_signal, sampling_rate = load_ecg_from_csv(args.input_csv)
+        if args.input_type == "array":
+            if args.sampling_rate is None:
+                print("错误: 直接传入数组数据时需要提供--sampling_rate参数")
+                sys.exit(1)
+
+            # 安全地将字符串形式的数组转换为numpy数组
+            try:
+                # 先尝试直接eval（适用于简单的数组字符串）
+                ecg_signal = np.array(ast.literal_eval(args.input_data), dtype=np.float64)
+            except:
+                # 如果失败，尝试从文件加载（兼容旧方式）
+                if os.path.exists(args.input_data):
+                    ecg_signal = np.load(args.input_data)
+                else:
+                    raise ValueError("无法解析输入的数组数据，且指定的文件不存在")
+
+            sampling_rate = args.sampling_rate
+        else:
+            # 从ACQ文件读取数据
+            ecg_signal, sampling_rate = load_ecg_data(args.input_data)
+
         print(f"成功加载ECG信号: {len(ecg_signal)} 个样本, 采样率: {sampling_rate:.1f}Hz")
 
         # 进行预测
@@ -157,6 +209,4 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"预测过程中出错: {str(e)}")
-
-
-
+        sys.exit(1)
