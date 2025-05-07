@@ -43,8 +43,9 @@ def extract_dwt_features(segments, wavelet='db4', level=4):
 
 
 def train_model(model, train_loader, test_loader, criterion, optimizer, epochs=15):
-    save_path = r"best_model.pth"
+    save_path = r"best_model.pt"
     best_loss = float('inf')
+    best_acc = 0
     for epoch in range(epochs):
         model.train()
         train_loss = 0
@@ -89,9 +90,11 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, epochs=1
         print(
             f"Epochs [{epoch}/{epochs}], training loss: {train_loss:.4f}, training accurary: {train_acc * 100:.2f}%, testing loss: {val_loss:.4f}, testing accurary: {test_acc * 100:.2f}%")
 
-        if val_loss < best_loss:
-            best_loss = val_loss
+        if test_acc > best_acc:
+            best_acc = test_acc
+            print("Saving model...")
             torch.save(model.state_dict(), save_path)
+            print("Best model saved!")
 
 
 if __name__ == '__main__':
