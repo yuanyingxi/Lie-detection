@@ -11,7 +11,7 @@ from skorch.helper import predefined_split
 import neurokit2 as nk
 import pywt
 import cv2
-from .wavelet_denoising import get_processed_ecg
+from wavelet_denoising import get_processed_ecg
 import pandas as pd
 import os
 import warnings
@@ -20,6 +20,10 @@ from collections import Counter
 # 设置随机种子
 torch.manual_seed(0)
 np.random.seed(0)
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
@@ -61,7 +65,7 @@ class LieDetectionModel(nn.Module):
         self.fc2 = nn.Linear(32, 2)
         self.dropout = nn.Dropout(0.5)
 
-    def forward(self, cwt, rr):
+    def extra_feature(self, cwt, rr):
         # CWT特征处理
         x1 = F.relu(self.bn1(self.conv1(cwt)))
         x1 = self.pooling1(x1)
@@ -75,7 +79,11 @@ class LieDetectionModel(nn.Module):
         x2 = F.relu(self.rr_fc1(rr))
 
         # 合并特征
-        x = torch.cat([x1, x2], dim=1)
+        x = torch.cat([x1, x2], dim=1)  # [batch, 80]
+        return x
+
+    def forward(self, cwt, rr):
+        x = self.extra_feature(cwt, rr)
         x = self.dropout(F.relu(self.fc1(x)))
         return self.fc2(x)
 
