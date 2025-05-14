@@ -12,7 +12,7 @@ import glob
 
 
 # 配置路径
-predictor_path = '.shape_predictor_68_face_landmarks.dat'
+predictor_path = 'FaceModule/shape_predictor_68_face_landmarks.dat'
 lstm_model_path = 'model/micro_expression_lstm.pth'
 cnn_model_path = 'model/lie_detection_model.pth'  # 保存模型的路径
 
@@ -624,7 +624,4 @@ if __name__ == "__main__":
     faceFileProcessor = FaceFileProcessor()
     output = faceFileProcessor.predict(process_path)
     print(output)
-
-
-
 

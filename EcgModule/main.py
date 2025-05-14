@@ -11,7 +11,7 @@ from skorch.helper import predefined_split
 import neurokit2 as nk
 import pywt
 import cv2
-from wavelet_denoising import get_processed_ecg
+from .wavelet_denoising import get_processed_ecg
 import pandas as pd
 import os
 import warnings

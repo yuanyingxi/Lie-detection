@@ -8,10 +8,10 @@ from numpy.f2py.auxfuncs import throw_error
 from sklearn.preprocessing import StandardScaler
 
 from EegModule.processing import segment_data, extract_dwt_features
-from model import MyModel
+from .model import MyModel
 
 class EEGFileProcessor:
-    def __init__(self,model_path='best_model.pt'):
+    def __init__(self,model_path='EegModule/best_model.pth'):
         self.model = MyModel()
         self.model.load_state_dict(torch.load(model_path))
 

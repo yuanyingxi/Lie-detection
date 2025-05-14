@@ -4,6 +4,7 @@ import pywt
 from .ecgLoader import EcgLoader
 import scipy.signal as sg
 
+
 def get_ecg_data():
     ecg_path = 'ECG'
     timeStamp_path = 'Label/ECG-timestamp.xlsx'
@@ -33,6 +34,7 @@ def calculate_snr(signal, noise):
     snr = 10 * np.log10(signal_power / noise_power) if noise_power != 0 else 0  # 计算 SNR
     return snr
 
+
 def sgn(num):
     """
     符号函数
@@ -44,7 +46,8 @@ def sgn(num):
     else:
         return -1.0
 
-def remove_baseline_wander(signal,sampling_rate):
+
+def remove_baseline_wander(signal, sampling_rate):
     """
     去除基线漂移
 
@@ -56,11 +59,11 @@ def remove_baseline_wander(signal,sampling_rate):
         filtered_signal (np.array) : 去除基线漂移后的信号，形状为 (10000,)
     """
     # 滤波去除基线漂移
-    baseline=sg.medfilt(sg.medfilt(signal,int(0.2*sampling_rate)-1),int(0.6*sampling_rate)-1)
-    filtered_signal=signal-baseline
-
+    baseline = sg.medfilt(sg.medfilt(signal, int(0.2 * sampling_rate) - 1), int(0.6 * sampling_rate) - 1)
+    filtered_signal = signal - baseline
 
     return filtered_signal
+
 
 def wavelet_noising(new_df):
     """
@@ -74,38 +77,38 @@ def wavelet_noising(new_df):
     data = new_df
     data = data.T.tolist()
     w = pywt.Wavelet('db8')
-    [ca5,cd5,cd4,cd3,cd2,cd1]=pywt.wavedec(data,w,level=5) # 分解波
+    [ca5, cd5, cd4, cd3, cd2, cd1] = pywt.wavedec(data, w, level=5)  # 分解波
 
-    length1=len(cd1)
-    length0=len(data)
+    length1 = len(cd1)
+    length0 = len(data)
 
     # 计算细节系数 cd1 的中位数绝对偏差
-    Cd1=np.array(cd1)
-    abs_cd1=np.abs(Cd1)
-    median_cd1=np.median(abs_cd1)
+    Cd1 = np.array(cd1)
+    abs_cd1 = np.abs(Cd1)
+    median_cd1 = np.median(abs_cd1)
 
-    sigma=(1.0/0.6745)*median_cd1 # 噪声的标准差估计值
-    lamda=sigma*math.sqrt(2.0*math.log(float(length0),math.e)) #阈值，用于判断细节系数是否为噪声
+    sigma = (1.0 / 0.6745) * median_cd1  # 噪声的标准差估计值
+    lamda = sigma * math.sqrt(2.0 * math.log(float(length0), math.e))  # 阈值，用于判断细节系数是否为噪声
 
-    usecoeffs=[] # 存储去噪后的系数
+    usecoeffs = []  # 存储去噪后的系数
     usecoeffs.append(ca5)
 
-    a=0.5 # 阈值处理强度
+    a = 0.5  # 阈值处理强度
 
     # 处理 cd1
     for k in range(length1):
-        if(abs(cd1[k])>=lamda):
-            cd1[k]=sgn(cd1[k])*(abs(cd1[k])-a*lamda)
+        if (abs(cd1[k]) >= lamda):
+            cd1[k] = sgn(cd1[k]) * (abs(cd1[k]) - a * lamda)
         else:
-            cd1[k]=0.0
+            cd1[k] = 0.0
 
     # 处理 cd2
-    length2=len(cd2)
+    length2 = len(cd2)
     for k in range(length2):
-        if(abs(cd2[k]) >= lamda):
-            cd2[k]=sgn(cd2[k])*(abs(cd2[k])-a*lamda)
+        if (abs(cd2[k]) >= lamda):
+            cd2[k] = sgn(cd2[k]) * (abs(cd2[k]) - a * lamda)
         else:
-            cd2[k]=0.0
+            cd2[k] = 0.0
 
     # 处理 cd3
     length3 = len(cd3)
@@ -139,8 +142,9 @@ def wavelet_noising(new_df):
     usecoeffs.append(cd1)
 
     # 去噪后的信号
-    recoeffs=pywt.waverec(usecoeffs,w)
+    recoeffs = pywt.waverec(usecoeffs, w)
     return recoeffs
+
 
 def process_ecg_dataset(ecg_data):
     """
@@ -152,16 +156,17 @@ def process_ecg_dataset(ecg_data):
     返回：
         processed_ecg_data (np.array) : 处理后的 ECG 数据集，形状为 (76,10000)
     """
-    processed_ecg_data=np.zeros_like(ecg_data) # 初始化存储处理后的数据
+    processed_ecg_data = np.zeros_like(ecg_data)  # 初始化存储处理后的数据
 
     # 遍历每个ECG信号并处理
     for i in range(ecg_data.shape[0]):
         # 1. 去除基线漂移
-        signal_no_baseline = remove_baseline_wander(ecg_data[i],sampling_rate=250)
+        signal_no_baseline = remove_baseline_wander(ecg_data[i], sampling_rate=250)
         # 2. 小波去噪
-        processed_ecg_data[i]=wavelet_noising(signal_no_baseline)
+        processed_ecg_data[i] = wavelet_noising(signal_no_baseline)
 
     return processed_ecg_data
+
 
 def get_processed_ecg():
     ecg_data = get_ecg_data()
@@ -171,12 +176,3 @@ def get_processed_ecg():
     processed_ecg_data = process_ecg_dataset(ecg_data)
 
     return processed_ecg_data
-
-
-
-
-
-
-
-
-

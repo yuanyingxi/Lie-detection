@@ -73,6 +73,7 @@ class EEGUploadView(BaseUploadView):
         if file.name.endswith('.csv'):
             content = file.read()
             file_data = pd.read_csv(BytesIO(content))  # shape: (T, ch)
+            print(file_data.shape)
         try:
             eegDetector = LieDetector().eegLoader
             output = eegDetector.predict(file_data)
@@ -151,8 +152,8 @@ class VideoUploadView(BaseUploadView):
     # 处理上传的 Video 文件
     def process_file(self, file_obj):
         try:
-            eegDetector = LieDetector().eegLoader
-            output = eegDetector.predict(file_obj)
+            faceDetector = LieDetector().faceLoader
+            output = faceDetector.predict(file_obj)
 
             Response_data = {
                 "logo": self.modality,
