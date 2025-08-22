@@ -35,5 +35,3 @@ class MyConv1D(nn.Module):
         x = self.conv(x)  # [b, 512, t]
         x = x.permute(0, 2, 1)  # [b, t, 512]
         return x
-
-

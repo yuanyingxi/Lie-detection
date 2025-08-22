@@ -16,6 +16,7 @@ class PositionalEncoding(nn.Module):
     输出:
         形状为 [batch_size, seq_len, d_model] 的张量，已添加位置编码
     """
+
     def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
         # 初始化一个位置编码矩阵，形状为 [max_len, d_model]
@@ -56,5 +57,5 @@ class PositionalEncoding(nn.Module):
         # x的形状: [batch_size, seq_len, d_model]
         # self.pe的形状: [1, max_len, d_model] → 切片后: [1, seq_len, d_model]
         # 通过广播机制，每个批次中的样本都会添加相同的位置编码
-        x = x + self.pe[:, :seq_len, :] # [batch_size, seq_len, d_model]
+        x = x + self.pe[:, :seq_len, :]  # [batch_size, seq_len, d_model]
         return x
