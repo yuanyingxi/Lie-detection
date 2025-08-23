@@ -48,6 +48,7 @@ class MainNet2(nn.Module):
     主要网络结构(二模态)
     """
     def __init__(self, d_model: int = 512):
+        super(MainNet2, self).__init__()
         self.d_model = d_model
         self.y_to_x = CrossModelAttentionLayer(d_model)
         self.transformer = nn.TransformerEncoder(
