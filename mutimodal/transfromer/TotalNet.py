@@ -3,12 +3,12 @@ import torch.nn as nn
 #
 from PositionalEncoding import PositionalEncoding
 from mutimodal.transfromer.Conv1D import MyConv1D
-from mutimodal.transfromer.MainNet import MainNet
+from mutimodal.transfromer.MainNet import MainNet3, MainNet2
 
 
-class TotalNet(nn.Module):
+class TotalNet3(nn.Module):
     """
-    transformer版本的总网络结构
+    transformer版本的总网络结构(3模态)
     包括：
         - 维度对齐 (Conv1D)
         - 位置编码 (PositionalEncoding)
@@ -17,7 +17,7 @@ class TotalNet(nn.Module):
     """
 
     def __init__(self):
-        super(TotalNet, self).__init__()
+        super(TotalNet3, self).__init__()
         # 初始化网络结构
         self.d_model = 512  # 维度对齐后的维度
 
@@ -28,9 +28,9 @@ class TotalNet(nn.Module):
         # Positional Encoding,
         self.pos = PositionalEncoding(self.d_model)
         # MainNet for Eeg, Face, Ecg
-        self.main_e = MainNet()
-        self.main_f = MainNet()
-        self.main_c = MainNet()
+        self.main_e = MainNet3()
+        self.main_f = MainNet3()
+        self.main_c = MainNet3()
         # Linear and Softmax
         self.f = nn.Sequential(
             nn.Linear(self.d_model * 6, 1024),
@@ -55,4 +55,40 @@ class TotalNet(nn.Module):
         # 拼接
         h = torch.cat((_d_eeg[:, -1, :], _d_face[:, -1, :], _d_ecg[:, -1, :]), dim=1)  # (batch, d_model*6)
         output = self.f(h)  # (batch, 1)
+        return output
+
+
+class TotalNet2(nn.Module):
+    """
+    两个模态的transfromer融合网络
+    """
+    def __init__(self):
+        super(TotalNet2, self).__init__()
+        # 初始化网络结构
+        self.d_model = 512  # 维度对齐后的维度
+        self.conv1_x = MyConv1D(self.d_model)
+        self.conv1_y = MyConv1D(self.d_model)
+        self.pos = PositionalEncoding(self.d_model)
+        self.main_xy = MainNet2()
+        self.main_yx = MainNet2()
+        self.f = nn.Sequential(
+            nn.Linear(self.d_model * 2, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, d_x,d_y):
+        # 维度对齐
+        d_x = self.conv1_x(d_x)
+        d_y = self.conv1_y(d_y)
+        # 位置编码
+        d_x = self.pos(d_x)
+        d_y = self.pos(d_y)
+        # 跨模态注意力
+        _d_xy = self.main_xy(d_x, d_y)
+        _d_yx = self.main_yx(d_y, d_x)
+        # 拼接
+        h = torch.cat((_d_xy[:, -1, :], _d_yx[:, -1, :]), dim=1)
+        output = self.f(h)
         return output
